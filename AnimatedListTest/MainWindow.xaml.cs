@@ -13,7 +13,6 @@ namespace AnimatedListTest
     /// </summary>
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
-        ObservableSortableFilterableCollection<int> test;
         ObservableCollectionView<string> collection;
 
         public MainWindow()
@@ -33,11 +32,6 @@ namespace AnimatedListTest
             };
 
             //collection.Remove("test1");
-
-            test = new ObservableSortableFilterableCollection<int>()
-            {
-                1,1,1,5,5,5
-            };
             
             IC.ItemsSource = collection;
         }

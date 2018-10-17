@@ -47,10 +47,12 @@ namespace AnimatedListTest
                 }
             }
 
-            if (double.IsInfinity(availableSize.Height) || double.IsInfinity(availableSize.Width))
-                return idealSize;
-            else
-                return availableSize;
+            return idealSize;
+
+            //if (double.IsInfinity(availableSize.Height) || double.IsInfinity(availableSize.Width))
+            //    return idealSize;
+            //else
+            //    return availableSize;
         }
 
         protected override Size ArrangeOverride(Size finalSize)
@@ -97,13 +99,11 @@ namespace AnimatedListTest
                 switch (Orientation)
                 {
                     case Orientation.Vertical:
-                        x = ActualWidth / 2;
-                        y = Offset + (child.DesiredSize.Height / 2);
+                        y = Offset + child.DesiredSize.Height;
                         Offset += child.DesiredSize.Height;
                         break;
                     case Orientation.Horizontal:
-                        x = Offset + (child.DesiredSize.Width / 2);
-                        y = ActualHeight / 2;
+                        x = Offset + child.DesiredSize.Width;
                         Offset += child.DesiredSize.Width;
                         break;
                 }

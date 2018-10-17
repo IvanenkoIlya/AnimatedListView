@@ -281,7 +281,7 @@ namespace AnimatedListTest
 
             int offset = 0;
 
-            for(int i = 0; i < index.Length; i++) // One correct move gets undone by the other moves
+            for(int i = 0; i < index.Length; i++) // TODO One correct move gets undone by the other moves, offset method doesn't work
             {
                 if( i != index[i] - offset)
                 {

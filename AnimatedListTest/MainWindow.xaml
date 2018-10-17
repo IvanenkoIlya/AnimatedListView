@@ -30,7 +30,6 @@
                         </Setter>
                     </Style>
                 </ItemsControl.ItemContainerStyle>
-
             </ItemsControl>
         </Border>
 

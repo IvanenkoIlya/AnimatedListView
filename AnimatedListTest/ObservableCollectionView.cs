@@ -49,9 +49,9 @@ namespace AnimatedListTest
 
         private void CopyList(IEnumerable<T> collection)
         {
-            if(collection != null && items != null)
+            if (collection != null && items != null)
             {
-                using(IEnumerator<T> enumerator = collection.GetEnumerator())
+                using (IEnumerator<T> enumerator = collection.GetEnumerator())
                 {
                     while (enumerator.MoveNext())
                     {
@@ -64,10 +64,7 @@ namespace AnimatedListTest
 
         public T this[int index]
         {
-            get
-            {
-                return items[index];
-            }
+            get { return items[index]; }
             set
             {
                 if (index < 0 || index >= items.Count)
@@ -78,12 +75,34 @@ namespace AnimatedListTest
         }
 
         public int Count { get { return items.Count; } }
-        
-        public bool IsReadOnly => throw new NotImplementedException();
+
+        public bool IsReadOnly { get { return false; } } // TODO implement later
 
         public void Add(T item)
         {
-            int index = items.Count; // index should be dependant on sort criteria
+            int index = items.Count;
+
+            // TODO Doesn't work after first sort description
+
+            if (SortDescriptions.Any())
+            {
+                int i = 0;               
+
+                foreach(SortDescription sd in SortDescriptions)
+                {
+                    IComparable value = item.GetType().GetProperty(sd.PropertyName).GetValue(item) as IComparable;
+                    int diff = value.CompareTo((IComparable)items[i].GetType().GetProperty(sd.PropertyName).GetValue(items[i]));
+
+                    while( sd.Direction == ListSortDirection.Ascending ? diff > 0 : diff < 0)
+                    {
+                        i++;
+                        diff = value.CompareTo((IComparable)items[i].GetType().GetProperty(sd.PropertyName).GetValue(items[i]));
+                    }
+                }
+
+                index = i;
+            }
+
             InsertItem(index, item);
         }
 
@@ -114,11 +133,11 @@ namespace AnimatedListTest
 
         public void Insert(int index, T item)
         {
+            if (SortDescriptions.Any())
+                throw new ArgumentException("Cannot insert item at specific index if ObservableCollectionView has any SortDescriptions, use Add instead", "index");
+
             if (index < 0 || index >= items.Count)
                 throw new ArgumentOutOfRangeException("index");
-
-            if (SortDescriptions.Any())
-                throw new ArgumentException("Cannot insert item at specific index if ObservableCollectionView has any SortDescriptions", "index");
 
             InsertItem(index, item);
         }
@@ -156,22 +175,76 @@ namespace AnimatedListTest
 
         protected virtual void InsertItem(int index, T item)
         {
+            InsertItem(index, item, false);
+        }
+
+        private void InsertItem(int index, T item, bool supressCollectionChanged)
+        {
+            bool visible = (Filter != null) ? Filter(item) : true;
+            int visibleIndex = -1;
+
+            // TODO look at logic, I think the if statement needs to be changed
+
+            for (int i = items.Count; i > index; i--) // <-- this loop is why we comment code
+            {
+                filteredItems[i] = filteredItems[i - 1];
+                if (filteredItems[i].Visible && visible)
+                {
+                    visibleIndex = filteredItems[i].VisibleIndex;
+                    filteredItems[i].VisibleIndex++;
+                }
+            }
+
+            if (index == items.Count && visible)
+            {
+                VisibleItem<T> last = (filteredItems.Values.Where(x => x.Visible)).LastOrDefault();
+
+                if (last != null)
+                    visibleIndex = last.VisibleIndex + 1;
+                else
+                    visibleIndex = 0;
+            }
+
             items.Insert(index, item);
 
-            filteredItems[index] = new VisibleItem<T>(index, item, (Filter != null) ? Filter(item) : true);
+            filteredItems[index] = new VisibleItem<T>(visibleIndex, item, visible);
 
-            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item, index));
-            //OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+            if (!supressCollectionChanged && visible)
+                OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item, visibleIndex));
         }
 
         protected virtual void RemoveItem(int index)
         {
-            T removedItem = items[index];
+            RemoveItem(index, false);
+        }
+
+        private void RemoveItem(int index, bool supressCollectionChanged)
+        {
+            int oldCount = Count;
+            VisibleItem<T> removedItem = filteredItems[index];
             items.RemoveAt(index);
 
-            //TODO remove item from filteredItems and
-            
-            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, removedItem, index));
+            for (int i = index + 1; i < oldCount; i++)
+            {
+                filteredItems[i - 1] = filteredItems[i];
+                //TODO need to update visible index, or do we? it's not really used and the CollectionChanged operation is taken care of
+            }
+
+            filteredItems.Remove(filteredItems.Count - 1);
+
+            if (!supressCollectionChanged && removedItem.Visible)
+                OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, removedItem.Item, index));
+        }
+
+        protected virtual void MoveItem(int oldIndex, int newIndex)
+        {
+            T removedItem = items[oldIndex];
+
+            RemoveItem(oldIndex, true);
+            InsertItem(newIndex, removedItem, true);
+
+            // TODO this needs to change if one or both are invisible
+            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Move, removedItem, newIndex, oldIndex));
         }
 
         protected virtual void SetItem(int index, T item)
@@ -180,23 +253,146 @@ namespace AnimatedListTest
             items[index] = item;
 
             OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Replace, item, originalItem, index));
+
+            // move to new sort position
         }
 
         private void SortDescriptionsChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
-            // Anything else that may go on here
-            Sort();
+            if(e.NewItems != null && e.NewItems.Count > 0)
+            {
+                var propertyName = ((SortDescription) e.NewItems[0]).PropertyName;
+                if (typeof(T).GetProperty(propertyName) == null)
+                    throw new ArgumentException($"Property \"{propertyName}\" not found in object of type {typeof(T)}");
+            }
+
+            // Don't need to sort if the last sort condidition was removed as list is already sorted by remaining criteria
+            if (!(e.Action == NotifyCollectionChangedAction.Remove && e.OldStartingIndex == SortDescriptions.Count - 1))
+                MergeSort();
         }
 
-        private void Sort()
+        #region Sort
+        public void MergeSort()
         {
-            // TODO sort
-            // This should get called whenever sort descriptions gets updated to keep list in sorted state
-            // doesn't need to be called on insertion as insert should take care of putting item in correct place
+            int[] index = new int[Count];
+            for (int i = 0; i < index.Count(); i++) index[i] = i;
+
+            Sort(index, 0, index.Length - 1);
+
+            int offset = 0;
+
+            for(int i = 0; i < index.Length; i++) // One correct move gets undone by the other moves
+            {
+                if( i != index[i] - offset)
+                {
+                    if (i < index[i])
+                        offset--;
+                    else
+                        offset++;
+                    MoveItem( index[i], i);
+                }
+            }
+
+            Refresh();
         }
+
+        private void Sort(int[] arr, int left, int right)
+        {
+            if (left < right)
+            {
+                int mid = (left + right) / 2;
+
+                Sort(arr, left, mid);
+                Sort(arr, mid + 1, right);
+
+                Merge(arr, left, mid, right);
+            }
+        }
+
+        private void Merge(int[] arr, int left, int mid, int right)
+        {
+            int size1 = mid - left + 1;
+            int size2 = right - mid;
+
+            int[] leftArr = new int[size1];
+            int[] rightArr = new int[size2];
+
+            int i, j;
+
+            for (i = 0; i < size1; ++i)
+                leftArr[i] = arr[left + i];
+
+            for (j = 0; j < size2; ++j)
+                rightArr[j] = arr[mid + 1 + j];
+
+            i = 0;
+            j = 0;
+            int k = left;
+
+            using (IEnumerator<SortDescription> e = SortDescriptions.GetEnumerator())
+            {
+                while (e.MoveNext())
+                {
+                    var temp = e.Current;
+                }
+            }
+
+            using (IEnumerator<SortDescription> e = SortDescriptions.GetEnumerator())
+            {
+                while (i < size1 && j < size2)
+                {
+                    if (!e.MoveNext())
+                    {
+                        e.Reset();
+                        arr[k] = leftArr[i];
+                        i++;
+                        k++;
+                    }
+                    else
+                    {
+                        string propertyName = e.Current.PropertyName;
+                        int compare = ((IComparable)typeof(T).GetProperty(propertyName).GetValue(items[leftArr[i]])).CompareTo(
+                            ((IComparable)typeof(T).GetProperty(propertyName).GetValue(items[rightArr[j]])));
+
+                        if (compare != 0)
+                        {
+                            if (compare < 0)
+                            {
+                                e.Reset();
+                                arr[k] = leftArr[i];
+                                i++;
+                            }
+                            else
+                            {
+                                e.Reset();
+                                arr[k] = rightArr[j];
+                                j++;
+                            }
+
+                            k++;
+                        }
+                    }
+                }
+            }
+
+            while (i < size1)
+            {
+                arr[k] = leftArr[i];
+                i++;
+                k++;
+            }
+
+            while (j < size2)
+            {
+                arr[k] = rightArr[j];
+                j++;
+                k++;
+            }
+        }
+        #endregion
 
         private void Refresh()
-        {
+        { // TODO might be able to refactor
             int index = 0;
             for (int i = 0; i < items.Count; i++)
             {
@@ -233,6 +429,10 @@ namespace AnimatedListTest
         public event PropertyChangedEventHandler PropertyChanged;
 
         // TODO implement OnPropertyChanged
+        protected internal void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
         #endregion
 
         #region INotifyCollectionChanged implementation
@@ -244,7 +444,7 @@ namespace AnimatedListTest
         }
         #endregion
 
-        [DebuggerDisplay("{VisibleIndex},{Visible}")]
+        [DebuggerDisplay("Index:{VisibleIndex} ; Item:{Item} ; Visible:{Visible}")]
         private class VisibleItem<T>
         {
             public int VisibleIndex;

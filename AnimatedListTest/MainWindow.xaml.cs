@@ -1,19 +1,15 @@
-﻿using System;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
+﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
-using System.Windows.Data;
 
 namespace AnimatedListTest
 {
-    
-
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
-        ObservableCollectionView<string> collection;
+        ObservableCollectionView<RankedString> collection;
 
         public MainWindow()
         {
@@ -21,40 +17,46 @@ namespace AnimatedListTest
 
             InitializeComponent();
 
-            collection = new ObservableCollectionView<string>()
+            collection = new ObservableCollectionView<RankedString>()
             {
-                "test0",
-                "test1",
-                "test1",
-                "test2",
-                "test3",
-                "test4"
+                new RankedString(1,"test0"),
+                new RankedString(3,"test1"),
+                new RankedString(2,"test2"),
+                new RankedString(3,"test3"),
+                new RankedString(1,"test1"),
+                new RankedString(2,"test4")
             };
-
-            //collection.Remove("test1");
-            
+                        
             IC.ItemsSource = collection;
         }
 
         private void MoveItemClicked(object sender, RoutedEventArgs e)
         {
-            Random rand = new Random();
-            int index = rand.Next(collection.Count);
-            int index2 = rand.Next(collection.Count);
-
-            //collection.Move(index, index2);
+            if(collection.SortDescriptions.Count < 2)
+            {
+                collection.SortDescriptions.Add(new SortDescription("Rank", ListSortDirection.Descending));
+                //collection.MergeSort();
+            }
         }
         
         private void AddItemClicked(object sender, RoutedEventArgs e)
         {
-            collection.Add(TB1.Text);
-            TB1.Clear();
+            if (TB1.Text != "")
+            {
+                string text = TB1.Text;
+
+                if (int.TryParse(text.Substring(text.Length - 1), out int res))
+                {
+                    collection.Add(new RankedString( 1,TB1.Text));
+                    TB1.Clear();
+                }
+            }
         }
 
         private void FilterClicked(object sender, RoutedEventArgs e)
         {
             if (collection.Filter == null)
-                collection.Filter = (x => int.Parse(x.Substring(x.Length - 1)) > 2);
+                collection.Filter = (x => int.Parse(x.Content.Substring(x.Content.Length - 1)) > 2);
             else
                 collection.Filter = null;
         }
@@ -69,9 +71,35 @@ namespace AnimatedListTest
         {
             if (collection.Count > 0)
             {
-                collection[0] = TB2.Text;
+                collection[0].Content = TB2.Text;
                 TB2.Clear();
             }
+        }
+
+        private void ClearItemsClicked(object sender, RoutedEventArgs e)
+        {
+            collection.Clear();
+        }
+
+        private void SortItemsClicked(object sender, RoutedEventArgs e)
+        {
+            switch (collection.SortDescriptions.Count)
+            {
+                case 0:
+                    collection.SortDescriptions.Add(new SortDescription("Content", ListSortDirection.Ascending));
+                    break;
+                case 1:
+                    collection.SortDescriptions.Add(new SortDescription("Rank", ListSortDirection.Descending));
+                    break;
+                default:
+                    collection.MergeSort();
+                    break;
+            }
+        }
+
+        private void BreakpointClicked(object sender, RoutedEventArgs e)
+        {
+            var temp = collection;
         }
 
         #region INotifyPropertyChanged implementation
@@ -82,5 +110,43 @@ namespace AnimatedListTest
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
         }
         #endregion
+    }
+
+    [DebuggerDisplay("{Rank} : {Content}")]
+    public class RankedString : INotifyPropertyChanged
+    {
+        public string RankedContent { get { return $"{Rank} : {Content}"; } }
+
+        private int _rank;
+        public int Rank
+        {
+            get { return _rank; }
+            set { _rank = value; OnPropertyChanged("Rank"); OnPropertyChanged("RankedContent"); }
+        }
+
+        private string _content;
+        public string Content
+        {
+            get { return _content; }
+            set { _content = value; OnPropertyChanged("Content"); OnPropertyChanged("RankedContent"); }
+        }
+
+        public RankedString( int rank, string content)
+        {
+            Rank = rank;
+            Content = content;
+        }
+
+        public override string ToString()
+        {
+            return RankedContent;
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        
+        protected void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 }

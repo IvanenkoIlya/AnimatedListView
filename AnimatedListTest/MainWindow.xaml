@@ -24,7 +24,7 @@
                         <Setter Property="ContentTemplate">
                             <Setter.Value>
                                 <DataTemplate>
-                                    <Label Content="{Binding}" Background="Red" BorderBrush="Blue" />
+                                    <Label Content="{Binding RankedContent}" Background="Red" BorderBrush="Blue" />
                                 </DataTemplate>
                             </Setter.Value>
                         </Setter>
@@ -39,13 +39,20 @@
                 <TextBox Name="TB1"  Width="100" Height="25" Margin="0,0,5,0"/>
                 <Button Width="100" Height="25" Content="Add Item" Click="AddItemClicked"/>
             </StackPanel>
-            <Button Width="100" Height="25" Margin="2" Content="Move Item" Click="MoveItemClicked"/>
             <StackPanel Orientation="Horizontal" Margin="2">
                 <TextBox Name="TB2"  Width="100" Height="25" Margin="0,0,5,0"/>
                 <Button Width="100" Height="25" Content="Set First" Click="SetItemClicked"/>
             </StackPanel>
-            <Button Width="100" Height="25" Margin="2" Content="Delete First" Click="DeleteItemClicked"/>
-            <Button Width="100" Height="25" Margin="2" Content="Filter" Click="FilterClicked"/>
+            <StackPanel Orientation="Horizontal" Margin="2">
+                <Button Width="100" Height="25" Margin="2" Content="Sort Items" Click="SortItemsClicked"/>
+                <Button Width="100" Height="25" Margin="2" Content="Filter" Click="FilterClicked"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="2">
+                <Button Width="100" Height="25" Margin="2" Content="Delete First" Click="DeleteItemClicked"/>
+                <Button Width="100" Height="25" Margin="2" Content="Clear" Click="ClearItemsClicked"/>
+            </StackPanel>
+            <Separator Margin="0,5,0,5"/>
+            <Button Width="100" Height="25" Margin="2" Content="Breakpoint" Click="BreakpointClicked"/>
         </StackPanel>
     </Grid>
 </Window>

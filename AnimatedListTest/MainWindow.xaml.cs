@@ -19,12 +19,21 @@ namespace AnimatedListTest
 
             collection = new ObservableCollectionView<RankedString>()
             {
-                new RankedString(1,"test0"),
+                new RankedString(1,"test3"),
                 new RankedString(3,"test1"),
-                new RankedString(2,"test2"),
-                new RankedString(3,"test3"),
+                new RankedString(3,"test0"),
                 new RankedString(1,"test1"),
-                new RankedString(2,"test4")
+                new RankedString(2,"test3"),
+                new RankedString(3,"test4"),
+                new RankedString(3,"test3"),
+                new RankedString(2,"test1"),
+                new RankedString(1,"test4"),
+                new RankedString(1,"test2"),
+                new RankedString(2,"test2"),
+                new RankedString(2,"test0"),
+                new RankedString(3,"test2"),
+                new RankedString(2,"test4"),
+                new RankedString(1,"test0"),
             };
                         
             IC.ItemsSource = collection;
@@ -35,7 +44,6 @@ namespace AnimatedListTest
             if(collection.SortDescriptions.Count < 2)
             {
                 collection.SortDescriptions.Add(new SortDescription("Rank", ListSortDirection.Descending));
-                //collection.MergeSort();
             }
         }
         
@@ -86,10 +94,10 @@ namespace AnimatedListTest
             switch (collection.SortDescriptions.Count)
             {
                 case 0:
-                    collection.SortDescriptions.Add(new SortDescription("Content", ListSortDirection.Ascending));
+                    collection.SortDescriptions.Add(new SortDescription("Rank", ListSortDirection.Descending));
                     break;
                 case 1:
-                    collection.SortDescriptions.Add(new SortDescription("Rank", ListSortDirection.Descending));
+                    collection.SortDescriptions.Add(new SortDescription("Content", ListSortDirection.Ascending));
                     break;
                 default:
                     collection.MergeSort();

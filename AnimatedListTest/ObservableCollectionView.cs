@@ -236,7 +236,7 @@ namespace AnimatedListTest
                 OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, removedItem.Item, index));
         }
 
-        protected virtual void MoveItem(int oldIndex, int newIndex)
+        protected virtual void MoveItem(int oldIndex, int newIndex, int newVisibleIndex)
         {
             T removedItem = items[oldIndex];
 
@@ -264,6 +264,9 @@ namespace AnimatedListTest
                 var propertyName = ((SortDescription) e.NewItems[0]).PropertyName;
                 if (typeof(T).GetProperty(propertyName) == null)
                     throw new ArgumentException($"Property \"{propertyName}\" not found in object of type {typeof(T)}");
+
+                if (!(typeof(T).GetProperty(propertyName) is IComparable))
+                    throw new ArgumentException($"Property \"{propertyName}\" is not of type IComparable");
             }
 
             // Don't need to sort if the last sort condidition was removed as list is already sorted by remaining criteria
@@ -279,17 +282,18 @@ namespace AnimatedListTest
 
             Sort(index, 0, index.Length - 1);
 
-            int offset = 0;
+            int visibleIndex = 0;
 
-            for(int i = 0; i < index.Length; i++) // TODO One correct move gets undone by the other moves, offset method doesn't work
+            for(int i = 0; i < index.Length; i++)
             {
-                if( i != index[i] - offset)
+                if( i != index[i])
                 {
-                    if (i < index[i])
-                        offset--;
-                    else
-                        offset++;
-                    MoveItem( index[i], i);
+                    MoveItem( index[i], i, visibleIndex);
+                }
+
+                for (int j = i; j < index.Length; j++)
+                {
+                    if (index[j] < index[i]) index[j]++;
                 }
             }
 
@@ -325,17 +329,8 @@ namespace AnimatedListTest
             for (j = 0; j < size2; ++j)
                 rightArr[j] = arr[mid + 1 + j];
 
-            i = 0;
-            j = 0;
+            i = 0; j = 0;
             int k = left;
-
-            using (IEnumerator<SortDescription> e = SortDescriptions.GetEnumerator())
-            {
-                while (e.MoveNext())
-                {
-                    var temp = e.Current;
-                }
-            }
 
             using (IEnumerator<SortDescription> e = SortDescriptions.GetEnumerator())
             {
@@ -358,15 +353,31 @@ namespace AnimatedListTest
                         {
                             if (compare < 0)
                             {
+                                if (e.Current.Direction == ListSortDirection.Ascending)
+                                {
+                                    arr[k] = leftArr[i];
+                                    i++;
+                                }
+                                else
+                                {
+                                    arr[k] = rightArr[j];
+                                    j++;
+                                }
                                 e.Reset();
-                                arr[k] = leftArr[i];
-                                i++;
                             }
                             else
                             {
+                                if (e.Current.Direction == ListSortDirection.Ascending)
+                                {
+                                    arr[k] = rightArr[j];
+                                    j++;
+                                }
+                                else
+                                { 
+                                    arr[k] = leftArr[i];
+                                    i++;
+                                }
                                 e.Reset();
-                                arr[k] = rightArr[j];
-                                j++;
                             }
 
                             k++;
@@ -401,25 +412,25 @@ namespace AnimatedListTest
                 if (visible)
                 {
                     filteredItems[i].VisibleIndex = index;
+
+                    if(!filteredItems[i].Visible)
+                    {
+                        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add,
+                            filteredItems[i].Item, index));
+                    }
+
+                    index++;
                 }
                 else
                 {
                     filteredItems[i].VisibleIndex = -1;
-                }
 
-                if (visible && !filteredItems[i].Visible)
-                {
-                    OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add,
+                    if (filteredItems[i].Visible)
+                    {
+                        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove,
                         filteredItems[i].Item, index));
+                    }
                 }
-                else if (!visible && filteredItems[i].Visible)
-                {
-                    OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove,
-                        filteredItems[i].Item, index));
-                }
-
-                if(visible)
-                    index++;
 
                 filteredItems[i].Visible = visible;
             }

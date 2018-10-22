@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 namespace AnimatedListTest
 {
     public class ObservableCollectionView<T> : IList<T>, INotifyPropertyChanged, INotifyCollectionChanged
+        where T : INotifyPropertyChanged
     {
         IList<T> items;
         Dictionary<int, VisibleItem> filteredItems;
@@ -93,35 +94,37 @@ namespace AnimatedListTest
         public void Add(T item)
         {
             int index = items.Count;
-
-            // TODO: Doesn't work propertly after first sort description
-
+            
             if (SortDescriptions.Any())
             {
-                int i = 0;               
-
-                foreach(SortDescription sd in SortDescriptions)
-                {
-                    IComparable value = item.GetType().GetProperty(sd.PropertyName).GetValue(item) as IComparable;
-                    int diff = value.CompareTo((IComparable)items[i].GetType().GetProperty(sd.PropertyName).GetValue(items[i]));
-
-                    while( sd.Direction == ListSortDirection.Ascending ? diff > 0 : diff < 0)
-                    {
-                        i++;
-                        // TODO: Bug with inserting at last index
-                        diff = value.CompareTo((IComparable)items[i].GetType().GetProperty(sd.PropertyName).GetValue(items[i])); 
-                    }
-                }
-
-                index = i;
+                index = GetSortedIndex(item);
             }
 
             InsertItem(index, item);
         }
 
-        public void Clear()
+        private int GetSortedIndex(T item)
         {
-            ClearItems();
+            int i = 0; 
+
+            foreach (SortDescription sd in SortDescriptions)
+            {
+                IComparable value = item.GetType().GetProperty(sd.PropertyName).GetValue(item) as IComparable;
+                int diff = value.CompareTo((IComparable)items[i].GetType().GetProperty(sd.PropertyName).GetValue(items[i]));
+
+                while (sd.Direction == ListSortDirection.Ascending ? diff > 0 : diff < 0)
+                {
+                    i++;
+                    if (i == Count)
+                        break;
+                    diff = value.CompareTo((IComparable)items[i].GetType().GetProperty(sd.PropertyName).GetValue(items[i]));
+                }
+
+                if (i == Count)
+                    break;
+            }
+
+            return i;
         }
 
         public bool Contains(T item)
@@ -137,6 +140,11 @@ namespace AnimatedListTest
         public IEnumerator<T> GetEnumerator()
         {
             return items.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return ((IEnumerable)items).GetEnumerator();
         }
 
         public int IndexOf(T item)
@@ -173,19 +181,6 @@ namespace AnimatedListTest
             RemoveItem(index);
         }
 
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return ((IEnumerable)items).GetEnumerator();
-        }
-
-        protected virtual void ClearItems()
-        {
-            filteredItems.Clear();
-            items.Clear();
-
-            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
-        }
-
         protected virtual void InsertItem(int index, T item)
         {
             InsertItem(index, item, false);
@@ -196,22 +191,20 @@ namespace AnimatedListTest
             bool visible = (Filter != null) ? Filter(item) : true;
             int visibleIndex = -1;
 
-            // TODO: look at logic, I think the if statement needs to be changed
-
-            for (int i = items.Count; i > index; i--) // <-- this loop is why we comment code, also it looks all sorts of wrong
+            // Move up all items after that are after index
+            for (int i = items.Count; i > index; i--)
             {
                 filteredItems[i] = filteredItems[i - 1];
+
+                // Update visible index if new item is also visable
                 if (filteredItems[i].Visible && visible)
                 {
                     visibleIndex = filteredItems[i].VisibleIndex;
-                    filteredItems[i].VisibleIndex++; // TODO: This line... what even
-                    // THIS IS RIGHT, WERE JUST NOT UPDATING ON REMOVE!!!
+                    filteredItems[i].VisibleIndex++;
                 }
             }
-            Console.WriteLine();
 
-            int tempVisibleIndex = visibleIndex;
-
+            // If inserting at end of list and item is visible, set visible index as largest VisibleIndex
             if (index == items.Count && visible)
             {
                 VisibleItem last = (filteredItems.Values.Where(x => x.Visible)).LastOrDefault();
@@ -225,6 +218,8 @@ namespace AnimatedListTest
             items.Insert(index, item);
 
             filteredItems[index] = new VisibleItem(visibleIndex, item, visible);
+
+            item.PropertyChanged += Item_PropertyChanged;
 
             if (!supressCollectionChanged && visible)
                 OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item, visibleIndex));
@@ -251,6 +246,8 @@ namespace AnimatedListTest
 
             filteredItems.Remove(filteredItems.Count - 1);
 
+            removedItem.Item.PropertyChanged -= Item_PropertyChanged;
+
             if (!supressCollectionChanged && removedItem.Visible)
                 OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, removedItem.Item, index));
         }
@@ -270,17 +267,51 @@ namespace AnimatedListTest
             if(visible)
                 OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Move, removedItem, newVisibleIndex, oldVisibleIndex));
         }
-
-        // TODO: Implementation not finished
+        
+        // TODO: This needs changing
         protected virtual void SetItem(int index, T item)
         {
             T originalItem = items[index];
             items[index] = item;
+            filteredItems[index].Item = item;
 
             OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Replace, item, originalItem, index));
 
-            int newIndex = 0; // TODO: Find new index
-            MoveItem(index, newIndex);
+            if (SortDescriptions.Any())
+                MoveItem(index, GetSortedIndex(item));
+        }
+
+        public void Clear()
+        {
+            ClearItems();
+        }
+
+        protected virtual void ClearItems()
+        {
+            filteredItems.Clear();
+            items.Clear();
+
+            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        }
+
+        private void Item_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if(SortDescriptions.Any(x => x.PropertyName == e.PropertyName))
+            {
+                int oldIndex = IndexOf((T)sender);
+                bool visible = filteredItems[oldIndex].Visible;
+                int oldVisibleIndex = filteredItems[oldIndex].VisibleIndex;
+
+                RemoveItem(oldIndex, true);
+
+                int newIndex = GetSortedIndex((T)sender);
+                InsertItem(newIndex, (T)sender, true);
+
+                int newVisibleIndex = filteredItems[newIndex].VisibleIndex;
+
+                if (visible)
+                    OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Move, (T)sender, newIndex, oldIndex));
+            }
         }
 
         private void SortDescriptionsChanged(object sender, NotifyCollectionChangedEventArgs e)
@@ -320,8 +351,6 @@ namespace AnimatedListTest
                     if (index[j] < index[i]) index[j]++;
                 }
             }
-
-            Refresh();
         }
 
         private void Sort(int[] arr, int left, int right)
@@ -426,8 +455,9 @@ namespace AnimatedListTest
         }
         #endregion
 
+        #region Refresh
         private void Refresh()
-        { 
+        {
             int index = 0;
             for (int i = 0; i < items.Count; i++)
             {
@@ -437,7 +467,7 @@ namespace AnimatedListTest
                 {
                     filteredItems[i].VisibleIndex = index;
 
-                    if(!filteredItems[i].Visible)
+                    if (!filteredItems[i].Visible)
                     {
                         OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add,
                             filteredItems[i].Item, index));
@@ -459,6 +489,7 @@ namespace AnimatedListTest
                 filteredItems[i].Visible = visible;
             }
         }
+        #endregion
 
         #region INotifyPropertyChanged implementation
         public event PropertyChangedEventHandler PropertyChanged;
@@ -481,17 +512,7 @@ namespace AnimatedListTest
         [DebuggerDisplay("Index: {VisibleIndex} ; Item: {Item} ; Visible: {Visible}")]
         private class VisibleItem
         {
-            private int _visibleIndex;
-            public int VisibleIndex
-            {
-                get { return _visibleIndex; }
-                set
-                {
-                    _visibleIndex = value;
-                    //if (value > 16)
-                        //Console.WriteLine(value);
-                }
-            }
+            public int VisibleIndex;
             public bool Visible;
             public T Item;
 

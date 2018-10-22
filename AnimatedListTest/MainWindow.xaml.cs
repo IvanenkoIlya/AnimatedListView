@@ -41,10 +41,10 @@ namespace AnimatedListTest
 
         private void MoveItemClicked(object sender, RoutedEventArgs e)
         {
-            if(collection.SortDescriptions.Count < 2)
-            {
-                collection.SortDescriptions.Add(new SortDescription("Rank", ListSortDirection.Descending));
-            }
+            //if(collection.SortDescriptions.Count < 2)
+            //{
+            //    collection.SortDescriptions.Add(new SortDescription("Rank", ListSortDirection.Descending));
+            //}
         }
         
         private void AddItemClicked(object sender, RoutedEventArgs e)
@@ -94,10 +94,10 @@ namespace AnimatedListTest
             switch (collection.SortDescriptions.Count)
             {
                 case 0:
-                    collection.SortDescriptions.Add(new SortDescription("Rank", ListSortDirection.Descending));
+                    collection.SortDescriptions.Add(new SortDescription("Content", ListSortDirection.Ascending));
                     break;
                 case 1:
-                    collection.SortDescriptions.Add(new SortDescription("Content", ListSortDirection.Ascending));
+                    collection.SortDescriptions.Add(new SortDescription("Rank", ListSortDirection.Ascending));
                     break;
                 default:
                     collection.MergeSort();
@@ -139,6 +139,13 @@ namespace AnimatedListTest
             set { _content = value; OnPropertyChanged("Content"); OnPropertyChanged("RankedContent"); }
         }
 
+        private NonComparable _nonComparable;
+        public NonComparable NC
+        {
+            get { return _nonComparable; }
+            set { _nonComparable = value; OnPropertyChanged("NC"); }
+        }
+
         public RankedString( int rank, string content)
         {
             Rank = rank;
@@ -150,11 +157,15 @@ namespace AnimatedListTest
             return RankedContent;
         }
 
+        #region INotifyPropertyChanged implementation
         public event PropertyChangedEventHandler PropertyChanged;
-        
+
         protected void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
+        #endregion
+
+        public class NonComparable { }
     }
 }

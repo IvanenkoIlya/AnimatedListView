@@ -16,7 +16,25 @@ namespace AnimatedListTest
     {
         IList<T> items;
         Dictionary<int, VisibleItem> filteredItems;
-    
+        
+        public T this[int index]
+        {
+            get { return items[index]; }
+            set
+            {
+                if (index < 0 || index >= items.Count)
+                    throw new ArgumentOutOfRangeException("index");
+
+                SetItem(index, value);
+            }
+        }
+        
+        public int Count { get { return items.Count; } }
+        public int VisibleCount { get { return filteredItems.Values.Where(x => x.Visible).Count(); } }
+
+        // TODO: implement later
+        public bool IsReadOnly { get { return false; } }
+
         /// <summary>
         /// List of SortDescription objects used to keep the ObsevableCollectionView in order. Sorts the collection in order of SortDescription. 
         /// </summary>
@@ -26,7 +44,7 @@ namespace AnimatedListTest
         /// <exception cref="System.ArgumentException">
         /// Thrown when object T's property named "propertyName" is not of type IComparable
         /// </exception>
-        public SortDescriptions SortDescriptions;
+        public ObservableSortDescriptions SortDescriptions;
 
         private Predicate<T> _filter;
         public Predicate<T> Filter
@@ -45,7 +63,7 @@ namespace AnimatedListTest
             items = new List<T>();
             filteredItems = new Dictionary<int, VisibleItem>();
 
-            SortDescriptions = new SortDescriptions();
+            SortDescriptions = new ObservableSortDescriptions();
             SortDescriptions.AddListener(SortDescriptionsChanged);
         }
 
@@ -72,59 +90,15 @@ namespace AnimatedListTest
         }
         #endregion
 
-        // TODO: Think about if this needs to be returning item from filtered or unfiltered list
-        public T this[int index]
+        public int IndexOf(T item)
         {
-            get { return items[index]; }
-            set
-            {
-                if (index < 0 || index >= items.Count)
-                    throw new ArgumentOutOfRangeException("index");
-
-                SetItem(index, value);
-            }
-        }
-
-        // TODO: Think about if this needs to be returning count of all items or filtered items
-        public int Count { get { return items.Count; } }
-
-        // TODO: implement later
-        public bool IsReadOnly { get { return false; } } 
-
-        public void Add(T item)
-        {
-            int index = items.Count;
+            return items.IndexOf(item);
             
-            if (SortDescriptions.Any())
-            {
-                index = GetSortedIndex(item);
-            }
-
-            InsertItem(index, item);
         }
 
-        private int GetSortedIndex(T item)
+        public int VisibleIndexOf(T item)
         {
-            int i = 0; 
-
-            foreach (SortDescription sd in SortDescriptions)
-            {
-                IComparable value = item.GetType().GetProperty(sd.PropertyName).GetValue(item) as IComparable;
-                int diff = value.CompareTo((IComparable)items[i].GetType().GetProperty(sd.PropertyName).GetValue(items[i]));
-
-                while (sd.Direction == ListSortDirection.Ascending ? diff > 0 : diff < 0)
-                {
-                    i++;
-                    if (i == Count)
-                        break;
-                    diff = value.CompareTo((IComparable)items[i].GetType().GetProperty(sd.PropertyName).GetValue(items[i]));
-                }
-
-                if (i == Count)
-                    break;
-            }
-
-            return i;
+            return filteredItems[items.IndexOf(item)].VisibleIndex;
         }
 
         public bool Contains(T item)
@@ -147,10 +121,18 @@ namespace AnimatedListTest
             return ((IEnumerable)items).GetEnumerator();
         }
 
-        public int IndexOf(T item)
+        #region Insert/Add
+        public void Add(T item)
         {
-            return items.IndexOf(item);
-        }
+            int index = items.Count;
+            
+            if (SortDescriptions.Any())
+            {
+                index = GetSortedIndex(item);
+            }
+
+            InsertItem(index, item);
+        }        
 
         public void Insert(int index, T item)
         {
@@ -161,24 +143,6 @@ namespace AnimatedListTest
                 throw new ArgumentOutOfRangeException("index");
 
             InsertItem(index, item);
-        }
-
-        public bool Remove(T item)
-        {
-            int index = items.IndexOf(item);
-            if (index < 0)
-                return false;
-
-            RemoveItem(index);
-            return true;
-        }
-
-        public void RemoveAt(int index)
-        {
-            if (index < 0 || index >= items.Count)
-                throw new ArgumentOutOfRangeException("index");
-
-            RemoveItem(index);
         }
 
         protected virtual void InsertItem(int index, T item)
@@ -224,6 +188,26 @@ namespace AnimatedListTest
             if (!supressCollectionChanged && visible)
                 OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item, visibleIndex));
         }
+        #endregion
+
+        #region Remove
+        public bool Remove(T item)
+        {
+            int index = items.IndexOf(item);
+            if (index < 0)
+                return false;
+
+            RemoveItem(index);
+            return true;
+        }
+
+        public void RemoveAt(int index)
+        {
+            if (index < 0 || index >= items.Count)
+                throw new ArgumentOutOfRangeException("index");
+
+            RemoveItem(index);
+        }
 
         protected virtual void RemoveItem(int index)
         {
@@ -251,6 +235,7 @@ namespace AnimatedListTest
             if (!supressCollectionChanged && removedItem.Visible)
                 OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, removedItem.Item, index));
         }
+        #endregion
 
         protected virtual void MoveItem(int oldIndex, int newIndex)
         {
@@ -268,19 +253,20 @@ namespace AnimatedListTest
                 OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Move, removedItem, newVisibleIndex, oldVisibleIndex));
         }
         
-        // TODO: This needs changing
         protected virtual void SetItem(int index, T item)
         {
             T originalItem = items[index];
             items[index] = item;
             filteredItems[index].Item = item;
 
-            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Replace, item, originalItem, index));
+            if(filteredItems[index].Visible)
+                OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Replace, item, originalItem, index));
 
             if (SortDescriptions.Any())
-                MoveItem(index, GetSortedIndex(item));
+                ResortItem(item);
         }
 
+        #region Clear
         public void Clear()
         {
             ClearItems();
@@ -293,43 +279,90 @@ namespace AnimatedListTest
 
             OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
         }
+        #endregion
 
-        private void Item_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        #region Helper methods
+        private int GetSortedIndex(T item)
         {
-            if(SortDescriptions.Any(x => x.PropertyName == e.PropertyName))
+            int i = 0;
+
+            foreach (SortDescription sd in SortDescriptions)
             {
-                int oldIndex = IndexOf((T)sender);
-                bool visible = filteredItems[oldIndex].Visible;
-                int oldVisibleIndex = filteredItems[oldIndex].VisibleIndex;
+                IComparable value = item.GetType().GetProperty(sd.PropertyName).GetValue(item) as IComparable;
+                int diff = value.CompareTo((IComparable)items[i].GetType().GetProperty(sd.PropertyName).GetValue(items[i]));
 
-                RemoveItem(oldIndex, true);
+                while (sd.Direction == ListSortDirection.Ascending ? diff > 0 : diff < 0)
+                {
+                    i++;
+                    if (i == Count)
+                        break;
+                    diff = value.CompareTo((IComparable)items[i].GetType().GetProperty(sd.PropertyName).GetValue(items[i]));
+                }
 
-                int newIndex = GetSortedIndex((T)sender);
-                InsertItem(newIndex, (T)sender, true);
+                if (i == Count)
+                    break;
+            }
 
-                int newVisibleIndex = filteredItems[newIndex].VisibleIndex;
+            return i;
+        }
+
+        private void ResortItem(T item)
+        {
+            int oldIndex = IndexOf(item);
+            int oldVisibleIndex = filteredItems[oldIndex].VisibleIndex;
+            bool oldVisible = filteredItems[oldIndex].Visible;
+            bool newVisible = (Filter != null) ? Filter(item) : true;
+
+            // if item was visible but is now filtered out, don't suppress the CollectionChanged event 
+            RemoveItem(oldIndex, (oldVisible && !newVisible) ? false : true);
+
+            int newIndex = GetSortedIndex(item);
+
+            // if item was filtered out but is now visible, don't suppress the CollectionChanged event
+            InsertItem(newIndex, item, (!oldVisible && newVisible) ? false : true);
+            
+            int newVisibleIndex = filteredItems[newIndex].VisibleIndex;
+            
+            // if item remained visible, notify Move event
+            if (oldVisible && newVisible)
+                OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Move, item, newVisibleIndex, oldVisibleIndex));
+        }
+
+        #region Refresh
+        public void Refresh()
+        {
+            int index = 0;
+            for (int i = 0; i < items.Count; i++)
+            {
+                bool visible = (Filter != null) ? Filter(items[i]) : true;
 
                 if (visible)
-                    OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Move, (T)sender, newIndex, oldIndex));
+                {
+                    filteredItems[i].VisibleIndex = index;
+
+                    if (!filteredItems[i].Visible)
+                    {
+                        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add,
+                            filteredItems[i].Item, index));
+                    }
+
+                    index++;
+                }
+                else
+                {
+                    filteredItems[i].VisibleIndex = -1;
+
+                    if (filteredItems[i].Visible)
+                    {
+                        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove,
+                        filteredItems[i].Item, index));
+                    }
+                }
+
+                filteredItems[i].Visible = visible;
             }
         }
-
-        private void SortDescriptionsChanged(object sender, NotifyCollectionChangedEventArgs e)
-        {
-            if(e.NewItems != null && e.NewItems.Count > 0)
-            {
-                var propertyName = ((SortDescription) e.NewItems[0]).PropertyName;
-                if (typeof(T).GetProperty(propertyName) == null)
-                    throw new ArgumentException($"Property \"{propertyName}\" not found in object of type {typeof(T)}");
-
-                if (typeof(T).GetProperty(propertyName).PropertyType.GetInterface("IComparable") == null)
-                    throw new ArgumentException($"Property \"{propertyName}\" of type \"{typeof(T).GetProperty(propertyName).PropertyType.FullName}\" does not implement IComparable");
-            }
-
-            // Don't need to sort if the last sort condidition was removed as list is already sorted by remaining criteria
-            if (!(e.Action == NotifyCollectionChangedAction.Remove && e.OldStartingIndex == SortDescriptions.Count - 1))
-                MergeSort();
-        }
+        #endregion
 
         #region MergeSort
         public void MergeSort()
@@ -454,40 +487,33 @@ namespace AnimatedListTest
             }
         }
         #endregion
+        #endregion
 
-        #region Refresh
-        private void Refresh()
+        #region Event Handlers
+        private void Item_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            int index = 0;
-            for (int i = 0; i < items.Count; i++)
+            if(SortDescriptions.Any(x => x.PropertyName == e.PropertyName))
             {
-                bool visible = (Filter != null) ? Filter(items[i]) : true;
-
-                if (visible)
-                {
-                    filteredItems[i].VisibleIndex = index;
-
-                    if (!filteredItems[i].Visible)
-                    {
-                        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add,
-                            filteredItems[i].Item, index));
-                    }
-
-                    index++;
-                }
-                else
-                {
-                    filteredItems[i].VisibleIndex = -1;
-
-                    if (filteredItems[i].Visible)
-                    {
-                        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove,
-                        filteredItems[i].Item, index));
-                    }
-                }
-
-                filteredItems[i].Visible = visible;
+                ResortItem((T)sender);
+                Refresh();
             }
+        }
+
+        private void SortDescriptionsChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            if(e.NewItems != null && e.NewItems.Count > 0)
+            {
+                var propertyName = ((SortDescription) e.NewItems[0]).PropertyName;
+                if (typeof(T).GetProperty(propertyName) == null)
+                    throw new ArgumentException($"Property \"{propertyName}\" not found in object of type {typeof(T)}");
+
+                if (typeof(T).GetProperty(propertyName).PropertyType.GetInterface("IComparable") == null)
+                    throw new ArgumentException($"Property \"{propertyName}\" of type \"{typeof(T).GetProperty(propertyName).PropertyType.FullName}\" does not implement IComparable");
+            }
+
+            // Don't need to sort if the last sort condidition was removed as list is already sorted by remaining criteria
+            if (!(e.Action == NotifyCollectionChangedAction.Remove && e.OldStartingIndex == SortDescriptions.Count - 1))
+                MergeSort();
         }
         #endregion
 
@@ -526,7 +552,7 @@ namespace AnimatedListTest
         #endregion
     }
 
-    public class SortDescriptions : SortDescriptionCollection
+    public class ObservableSortDescriptions : SortDescriptionCollection
     {
         public void AddListener(NotifyCollectionChangedEventHandler a)
         {

@@ -93,7 +93,6 @@ namespace AnimatedListTest
         public int IndexOf(T item)
         {
             return items.IndexOf(item);
-            
         }
 
         public int VisibleIndexOf(T item)

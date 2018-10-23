@@ -15,7 +15,7 @@
             <ItemsControl Name="IC" Margin="0" HorizontalAlignment="Center">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <local:AnimatedListPanel Orientation="Vertical"/>
+                        <local:AnimatedListPanel Orientation="Vertical" Duration="250" StartPoint="0,400"/>
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
 

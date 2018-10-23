@@ -16,6 +16,22 @@ namespace AnimatedListTest
             get { return (Orientation)GetValue(OrientationProperty); }
             set { SetValue(OrientationProperty, value); }
         }
+
+        public static readonly DependencyProperty StartPointProperty =
+            DependencyProperty.Register("StartPoint", typeof(Point), typeof(AnimatedListPanel), new PropertyMetadata(new Point(0, 0)));
+        public Point StartPoint
+        {
+            get { return (Point)GetValue(StartPointProperty); }
+            set { SetValue(StartPointProperty, value); }
+        }
+
+        public static readonly DependencyProperty DurationProperty =
+            DependencyProperty.Register("Duration", typeof(double), typeof(AnimatedListPanel), new PropertyMetadata(200.0));
+        public double Duration
+        {
+            get { return (double)GetValue(DurationProperty); }
+            set { SetValue(DurationProperty, value); }
+        }
         #endregion
         
         private Size ourSize;
@@ -47,12 +63,10 @@ namespace AnimatedListTest
                 }
             }
 
-            return idealSize;
+            idealSize.Width = Math.Min(idealSize.Width, availableSize.Width);
+            idealSize.Height = Math.Min(idealSize.Height, availableSize.Height);
 
-            //if (double.IsInfinity(availableSize.Height) || double.IsInfinity(availableSize.Width))
-            //    return idealSize;
-            //else
-            //    return availableSize;
+            return idealSize;
         }
 
         protected override Size ArrangeOverride(Size finalSize)
@@ -67,14 +81,13 @@ namespace AnimatedListTest
             {
                 if (child.RenderTransform as TransformGroup == null)
                 {
-                    child.RenderTransformOrigin = new Point(0.0, 0.0); // Might need to change this based on orientation
+                    child.RenderTransformOrigin = new Point(0.0, 0.0);
                     TransformGroup group = new TransformGroup();
                     group.Children.Add(new TranslateTransform());
                     child.RenderTransform = group;
                 }
-                Point p = new Point(0, 0);
-
-                child.Arrange(new Rect(p.X, p.Y, child.DesiredSize.Width, child.DesiredSize.Height)); // This starting value needs to be set to childs previous position
+                
+                child.Arrange(new Rect(StartPoint.X, StartPoint.Y, child.DesiredSize.Width, child.DesiredSize.Height));
 
                 totalChildrenSize += Orientation == Orientation.Vertical ? child.DesiredSize.Height : child.DesiredSize.Width;
             }
@@ -89,7 +102,6 @@ namespace AnimatedListTest
             if (Children == null || Children.Count == 0)
                 return;
             
-            double duration = 200;
             double Offset = 0;
 
             foreach (UIElement child in Children)
@@ -108,7 +120,7 @@ namespace AnimatedListTest
                         break;
                 }
 
-                AnimateTo(child, x, y, duration);
+                AnimateTo(child, x - StartPoint.X, y - StartPoint.Y, Duration);                
             }
         }
 

@@ -100,7 +100,7 @@ namespace AnimatedListTest
                     collection.SortDescriptions.Add(new SortDescription("Rank", ListSortDirection.Ascending));
                     break;
                 default:
-                    collection.MergeSort();
+                    collection.QuickSort();
                     break;
             }
         }

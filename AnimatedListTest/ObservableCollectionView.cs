@@ -1,13 +1,10 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace AnimatedListTest
 {
@@ -486,6 +483,96 @@ namespace AnimatedListTest
             }
         }
         #endregion
+
+        #region QuickSort
+        public void QuickSort()
+        {
+            int[] index = new int[Count];
+            for (int i = 0; i < index.Count(); i++) index[i] = i;
+
+            QuickSort(index, 0, index.Length - 1);
+
+            for (int i = 0; i < index.Length; i++)
+            {
+                if (i != index[i])
+                {
+                    MoveItem(index[i], i);
+                }
+
+                for (int j = i; j < index.Length; j++)
+                {
+                    if (index[j] < index[i]) index[j]++;
+                }
+            }
+        }
+
+        private void QuickSort(int[] arr, int low, int high)
+        {
+            if (low < high)
+            {
+                int pi = Partition(arr, low, high);
+
+                QuickSort(arr, low, pi - 1);
+                QuickSort(arr, pi + 1, high);
+            }
+        }
+
+        private int Partition(int[] arr, int low, int high)
+        {
+            int pivot = arr[high];
+            int i = (low - 1);
+
+            using (IEnumerator<SortDescription> e = SortDescriptions.GetEnumerator())
+            {
+                for (int j = low; j < high; j++)
+                {
+                    int compare = 0;
+
+                    while (e.MoveNext())
+                    {
+                        string propertyName = e.Current.PropertyName;
+                        compare = ((IComparable)typeof(T).GetProperty(propertyName).GetValue(items[arr[j]])).CompareTo(
+                            ((IComparable)typeof(T).GetProperty(propertyName).GetValue(items[pivot])));
+
+                        if(compare < 0)
+                        {
+                            i++;
+
+                            int temp = arr[i];
+                            arr[i] = arr[j];
+                            arr[j] = temp;
+
+                            e.Reset();
+                            break;
+                        }
+                        else if(compare > 0)
+                        {
+                            e.Reset();
+                            break;
+                        }
+                    }
+
+                    // if no more sort descriptions then equal
+                    if (compare == 0)
+                    {
+                        i++;
+
+                        int temp = arr[i];
+                        arr[i] = arr[j];
+                        arr[j] = temp;
+
+                        e.Reset();
+                    }
+                }
+            }
+
+            int temp1 = arr[i + 1];
+            arr[i + 1] = arr[high];
+            arr[high] = temp1;
+
+            return i + 1;
+        }
+        #endregion
         #endregion
 
         #region Event Handlers
@@ -512,7 +599,7 @@ namespace AnimatedListTest
 
             // Don't need to sort if the last sort condidition was removed as list is already sorted by remaining criteria
             if (!(e.Action == NotifyCollectionChangedAction.Remove && e.OldStartingIndex == SortDescriptions.Count - 1))
-                MergeSort();
+                QuickSort();
         }
         #endregion
 

@@ -282,6 +282,9 @@ namespace AnimatedListTest
         {
             int i = 0;
 
+            if (Count == 0)
+                return 0;
+
             foreach (SortDescription sd in SortDescriptions)
             {
                 IComparable value = item.GetType().GetProperty(sd.PropertyName).GetValue(item) as IComparable;
@@ -534,7 +537,8 @@ namespace AnimatedListTest
                         compare = ((IComparable)typeof(T).GetProperty(propertyName).GetValue(items[arr[j]])).CompareTo(
                             ((IComparable)typeof(T).GetProperty(propertyName).GetValue(items[pivot])));
 
-                        if(compare < 0)
+                        if ((compare < 0 && e.Current.Direction == ListSortDirection.Ascending) ||
+                            (compare > 0 && e.Current.Direction == ListSortDirection.Descending))
                         {
                             i++;
 
@@ -545,7 +549,8 @@ namespace AnimatedListTest
                             e.Reset();
                             break;
                         }
-                        else if(compare > 0)
+                        else if ((compare > 0 && e.Current.Direction == ListSortDirection.Ascending) ||
+                            (compare < 0 && e.Current.Direction == ListSortDirection.Descending))
                         {
                             e.Reset();
                             break;
